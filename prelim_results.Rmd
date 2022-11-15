@@ -1,0 +1,111 @@
+---
+title: "Preliminary Results in R"
+output: html_document
+---
+
+# Reading the Data
+
+We will first read the `SeoulBikeData.csv` into R and load in packages that we will use for the analyses.
+
+```{r}
+# Load data and packages -------------------------------------------------------
+# data
+bike <- read.csv("SeoulBikeData.csv", check.names = F)
+
+# packages
+library(tidyverse)
+library(lubridate)
+library(corrplot)
+library(car)
+
+```
+
+# Data Pre-processing
+
+Now we will do some data cleaning and wranging to get our data into a tidy format. 
+
+```{r}
+# Pre-processing ---------------------------------------------------------------
+# Rename columns
+colnames(bike) <- c("date", "count", "hour", "temp", "humidity", "windspeed", "visibility", "dew", "solar", "rain", "snow", "seasons", "holiday", "functioning")
+
+# Converting variable into different classes
+bike <- bike %>%
+  mutate(date = as.POSIXct(date, format = "%d/%m/%Y"), # date
+         month =  months(date),      # add months variable
+         seasons = factor(seasons), # factor
+         holiday = factor(holiday), # factor
+         functioning_day = factor(functioning)) # factor
+
+# Peak of our data
+glimpse(bike)
+head(bike, 10)
+summary(bike)
+```
+
+We see that our data is now in tidy format since all column headers correspond to variable names, variables are only stored in columns, and there is one variable per column (Wickham, 2014). 
+
+# Exploratory Data Analysis (EDA)
+
+We will conduct an exploratory data analysis to explore questions mentioned in the introduction. 
+
+Let's first look at the overall distribution of bike rentals across time. 
+
+```{r}
+# EDA --------------------------------------------------------------------------
+# Plot daily counts
+bike %>%
+  ggplot(aes(x=date, y = count)) + 
+  geom_col() +
+  scale_x_datetime(breaks = "1 month") + 
+  ylab("Count") +
+  xlab("Date") + 
+  theme_minimal() + 
+  theme(legend.position = "none")
+
+# Plot monthly counts
+bike %>%
+  ggplot(aes(month, count)) +
+  geom_col() +
+  ylab("Count") +
+  xlab("Month") + 
+  theme_minimal() + 
+  theme(legend.position = "none") 
+
+```
+
+It appears that the most number of rentals was during the summer months of 2018 and that June and July tend to be the most popular months for rentals. 
+
+Now we will identify variables that are correlated with one another and select a subset of the dataset with no multicollinearity. 
+
+```{r}
+# Multicollinearity ----------------------------------------------------------------------
+## df of numeric environmental variables
+bike_var <- bike %>%
+  select(c(temp, humidity, windspeed, visibility, dew, solar, rain, snow))
+
+## correlation matrix
+cor_matrix <- cor(bike_var)
+cor_matrix
+
+## correlation plot
+corrplot(cor(bike_var), use = "complete.obs", method="circle")
+
+
+## variance inflation factor selection (<5)
+model_vif1 <- lm(count~ temp + humidity + windspeed + visibility + dew + solar + rain + snow, data = bike)
+
+vif(model_vif)
+
+model_vif2 <- lm(count~ temp + humidity + windspeed + visibility  + solar + rain + snow, data = bike)
+```
+
+
+As a general rule of thumb, a variance inflation factor of 5 is used to select for variables that have zero to moderate correlation (O'brien, 2007). Based on the correlation plot and variance inflation factor, we notice that temperature and dew are quite correlated with one another. Additionally, the variance inflation factor for humidity (>5) suggests high correlation with other variables. We removed the dew point variable which reduced the collinearity between temperature and humidity since dew point is the temperature to which air must be cooled to become saturated with water vapor and is affected by humidity. 
+
+# References 
+O’brien, R. M. (2007). A caution regarding rules of thumb for variance inflation factors. Quality &amp; Quantity, 41(5), 673–690. https://doi.org/10.1007/s11135-006-9018-6 
+
+Wickham, H. (2014). Tidy Data. Journal of Statistical Software, 59(10). https://doi.org/10.18637/jss.v059.i10 
+
+
